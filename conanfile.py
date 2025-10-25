@@ -1,0 +1,63 @@
+from conan import ConanFile
+from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
+from conan.tools.build import check_min_cppstd
+
+class SledRCCPPRecipe(ConanFile):
+    name = "sled-rccpp"
+    version = "0.1.0"
+    package_type = "static-library"
+    user = "iceshard"
+    channel = "stable"
+
+    # Optional metadata
+    license = "MIT"
+    author = "dandielo@iceshard.net"
+    url = "https://github.com/iceshard/sled-rccpp"
+    description = ""
+    topics = ("c++", "runtime-compiltaion", "hot-realod", "rccpp", "rcc++", "iceshard")
+
+    # Binary configuration
+    settings = "os", "compiler", "build_type", "arch"
+    options = {"fPIC": [True, False]}
+    default_options = {"fPIC": True}
+
+    # Sources are located in the same place as this recipe, copy them to the recipe
+    exports_sources = "CMakeLists.txt", "public/*", "private/*"
+
+    # Iceshard conan tools and requirements
+    tool_requires = "cmake/[>=3.25.3 <4.0]", "ninja/[>=1.11.1 <2.0]"
+
+    requires = "rccpp/0.1.0@iceshard/stable"
+
+    def config_options(self):
+        if self.settings.os == "Windows":
+            self.options.rm_safe("fPIC")
+
+    def configure(self):
+        self.settings.compiler.cppstd = 20
+
+    def layout(self):
+        cmake_layout(self)
+
+    def generate(self):
+        deps = CMakeDeps(self)
+        deps.generate()
+        tc = CMakeToolchain(self, "Ninja")
+        if self.settings.os == "Linux":
+            tc.variables["CMAKE_C_COMPILER"] = str(self.settings.compiler)
+            tc.variables["CMAKE_CXX_COMPILER"] = str(self.settings.compiler)
+        tc.generate()
+
+    def build(self):
+        cmake = CMake(self)
+        cmake.configure()
+        cmake.build()
+
+    def package(self):
+        cmake = CMake(self)
+        cmake.install()
+
+    def package_info(self):
+        self.cpp_info.libdirs = ["lib"]
+        self.cpp_info.libs = ["sled"]
+        self.cpp_info.includedirs = ["include"]
