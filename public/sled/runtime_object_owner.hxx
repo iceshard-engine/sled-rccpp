@@ -14,7 +14,7 @@ namespace sled
 
 		virtual ~ISlRuntimeObjectOwner() noexcept = default;
 
-		virtual void notify(sled::SlObjectId object_id) noexcept = 0;
+		virtual void notify(sled::SlObjectId object_id) noexcept { }
 
 	protected:
 		sled::ISlObjectFactorySystem* _factory;

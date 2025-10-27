@@ -7,25 +7,14 @@ namespace sled
 
 	struct SlUniqueID
 	{
-		uint64_t value;
+		uint32_t value;
 	};
 
-	constexpr bool operator==(SlUniqueID left, SlUniqueID right) noexcept
+	constexpr bool operator==(sled::SlUniqueID left, sled::SlUniqueID right) noexcept
 	{
 		return left.value == right.value;
 	}
 
-	template<typename T>
-	static constexpr SlUniqueID Constant_RuntimeTypeUniqueID = { 0 };
-
-	namespace concepts
-	{
-
-		template<typename T>
-		concept RuntimeCompileReadyType = requires {
-			std::is_default_constructible_v<T>;
-		} and Constant_RuntimeTypeUniqueID<T> != sled::SlUniqueID{ 0 };
-
-	} // namespace concepts
+	static constexpr sled::SlUniqueID SlUniqueID_Invalid{ 0 };
 
 } // namespace sled

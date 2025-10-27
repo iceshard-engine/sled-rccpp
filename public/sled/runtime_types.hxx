@@ -4,19 +4,8 @@
 #include <vector>
 #include <string>
 #include <string_view>
-#include <Aurora/RuntimeObjectSystem/IObject.h>
-#include <Aurora/RuntimeObjectSystem/IObjectFactorySystem.h>
-#include <Aurora/RuntimeObjectSystem/ObjectInterface.h>
-#include <Aurora/RuntimeObjectSystem/RuntimeTracking.h>
-#include <Aurora/RuntimeObjectSystem/ObjectInterfacePerModule.h>
-#include <sled/runtime_concepts.hxx>
-
-
-struct IObjectFactorySystem;
-template<typename T>
-class TActual;
-template<typename T>
-class TObjectConstructorConcrete;
+#include <sled/runtime_type_traits.hxx>
+#include <sled/runtime_rccpp_includes.hxx>
 
 namespace sled
 {
@@ -48,7 +37,7 @@ namespace sled
 	template<typename T>
 	class SlPtr;
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	class SlRuntimeObject;
 
 	template<typename T>

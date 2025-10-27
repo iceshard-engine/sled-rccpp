@@ -40,4 +40,39 @@ namespace sled
 		ISimpleSerializer* const _impl;
 	};
 
+	namespace concepts
+	{
+
+		template<typename T>
+		concept HasSerializeMethod = requires(T const& t, sled::SlObjectSerializer& s) {
+			{ t.on_serialize(s) } -> std::convertible_to<void>;
+		};
+
+		template<typename T>
+		concept HasDeserializeMethod = requires(T& t, sled::SlObjectSerializer const& s) {
+			{ t.on_deserialize(s) } -> std::convertible_to<void>;
+		};
+
+		template<typename T>
+		concept HasReconstructMethod = requires(void* memory, sled::SlObjectSerializer const& s) {
+			{ T::on_reconstruct(memory, s) } -> std::convertible_to<void>;
+		};
+
+		template<typename T>
+		concept HasRuntimeConstructMethod = requires(void* memory, sled::SlObjectSerializer const& s) {
+			{ T::on_construct(memory) } -> std::convertible_to<void>;
+		};
+
+		template<typename T>
+		concept SerializableType = sled::concepts::IsRuntimeCompileReady<T>
+			&& sled::concepts::HasSerializeMethod<T>
+			&& sled::concepts::HasDeserializeMethod<T>;
+
+		template<typename T>
+		concept ReconstructibleType = sled::concepts::IsRuntimeCompileReady<T>
+			&& sled::concepts::HasSerializeMethod<T>
+			&& sled::concepts::HasReconstructMethod<T>;
+
+	} // namespace concepts
+
 } // namespace sled

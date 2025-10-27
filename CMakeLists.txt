@@ -5,15 +5,13 @@ find_package(rccpp REQUIRED)
 
 add_library(sled
     "private/runtime_types.cxx"
-    "private/runtime_concepts.cxx"
     "private/runtime_object.cxx"
     "private/runtime_object_actual.cxx"
     "private/runtime_object_constructor.cxx"
     "private/runtime_ptr.cxx"
     "public/sled/runtime_uniqueid.hxx"
     "public/sled/runtime_types.hxx"
-    "public/sled/runtime_concepts.hxx"
-    "public/sled/runtime_interfaces.hxx"
+    "public/sled/runtime_object_interface.hxx"
     "public/sled/runtime_object.hxx"
     "public/sled/runtime_object_actual.hxx"
     "public/sled/runtime_object_constructor.hxx"

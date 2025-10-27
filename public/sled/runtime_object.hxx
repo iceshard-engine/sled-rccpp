@@ -1,6 +1,6 @@
 #pragma once
-#include <sled/runtime_concepts.hxx>
-#include <sled/runtime_interfaces.hxx>
+#include <sled/runtime_types.hxx>
+#include <sled/runtime_object_interface.hxx>
 #include <sled/runtime_object_serializer.hxx>
 #include <sled/runtime_object_constructor.hxx>
 
@@ -15,15 +15,20 @@ namespace sled
 
 	} // namespace rccpp
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	class SlRuntimeObject : public IObject, public sled::ISlRuntimeObject
 	{
 	public:
-		static constexpr sled::SlUniqueID UniqueID = Constant_RuntimeTypeUniqueID<T>;
+		static constexpr sled::SlUniqueID UniqueID = sled::detail::uniqueid<T>();
 
 		SlRuntimeObject() noexcept;
 
 		constexpr auto unique_id() const noexcept -> sled::SlUniqueID override { return UniqueID; }
+
+		constexpr bool implements(sled::SlUniqueID uniqueid) const noexcept override
+		{
+			return sled::detail::uniqueid_implements<T>(uniqueid);
+		}
 
 		auto constructor() const noexcept -> sled::SlRuntimeObjectConstructor<T>*;
 
@@ -40,7 +45,7 @@ namespace sled
 		static auto init_rccpp_object(
 			sled::SlRuntimeObjectConstructor<T, std::tuple<Args...>>* ctor,
 			IObject* object,
-			std::remove_cvref_t<Args>&&... args
+			std::type_identity_t<Args>... args
 		) noexcept -> SlRuntimeObject<T>*;
 
 		auto rccpp_object() noexcept -> IObject* { return this; }
@@ -53,20 +58,20 @@ namespace sled
 		~SlRuntimeObject() noexcept override = default;
 	};
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	inline auto SlRuntimeObject<T>::constructor() const noexcept -> sled::SlRuntimeObjectConstructor<T>*
 	{
 		return static_cast<sled::SlRuntimeObjectConstructor<T>*>(GetConstructor());
 	}
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	inline auto SlRuntimeObject<T>::from_rccpp_object(IObject* object) noexcept -> SlRuntimeObject<T>*
 	{
 		SlRuntimeObject<T>* result = nullptr;
 		return object->GetInterface(UniqueID.value, reinterpret_cast<void**>(std::addressof(result))), result;
 	}
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	template<typename... Args> requires (std::is_default_constructible_v<T>)
 	inline auto SlRuntimeObject<T>::init_rccpp_object(
 		sled::SlRuntimeObjectConstructor<T, std::tuple<Args...>>* ctor,
@@ -81,23 +86,23 @@ namespace sled
 		return result;
 	}
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	template<typename... Args>
 	inline auto SlRuntimeObject<T>::init_rccpp_object(
 		sled::SlRuntimeObjectConstructor<T, std::tuple<Args...>>* ctor,
 		IObject* object,
-		std::remove_cvref_t<Args>&&... args
+		std::type_identity_t<Args>... args
 	) noexcept -> SlRuntimeObject<T>*
 	{
 		sled::SlRuntimeObject<T>* const result = from_rccpp_object(object);
 		assert(result != nullptr);
 
 		sled::SlRuntimeObjectConstructor<T>* const sled_ctor = static_cast<sled::SlRuntimeObjectConstructor<T>*>(ctor);
-		sled_ctor->InitializeMemory(result->storage(), std::forward<Args>(args)...);
+		sled_ctor->InitializeMemory(result->storage(), args...);
 		return result;
 	}
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	inline SlRuntimeObject<T>::SlRuntimeObject() noexcept
 		: IObject{ }
 		, sled::ISlRuntimeObject{ }
@@ -105,20 +110,20 @@ namespace sled
 	}
 
 	// Implementation Of: IObject
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	inline void SlRuntimeObject<T>::GetInterface(InterfaceID iid, void** pReturn)
 	{
-		switch (iid)
+		if (sled::detail::uniqueid_implements<T>(sled::SlUniqueID{ iid }))
 		{
-		case UniqueID.value:
 			*pReturn = this;
-			break;
-		default:
+		}
+		else
+		{
 			*pReturn = nullptr;
 		}
 	}
 
-	template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 	inline void SlRuntimeObject<T>::Serialize(ISimpleSerializer* serializer_impl)
 	{
 		sled::SlObjectSerializer serializer{ serializer_impl };
@@ -128,7 +133,7 @@ namespace sled
 			{
 				if constexpr (sled::concepts::HasDeserializeMethod<T>)
 				{
-					value()->on_deserialize(serializer);
+					value<T>()->on_deserialize(serializer);
 				}
 				else
 				{
@@ -137,7 +142,7 @@ namespace sled
 			}
 			else
 			{
-				value()->on_serialize(serializer);
+				value<T>()->on_serialize(serializer);
 			}
 		}
 		else if (serializer_impl->IsLoading())
@@ -146,7 +151,7 @@ namespace sled
 			{
 				T::on_reconstruct(storage(), serializer);
 			}
-			else
+			else // if constexpr (std::is_abstract_v<T> == false)
 			{
 				static_assert(std::is_default_constructible_v<T>, "The type needs to be default constructible to define a reconstruct method");
 				constructor()->InitializeMemory(this->storage());

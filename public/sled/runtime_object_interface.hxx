@@ -11,11 +11,12 @@ namespace sled
 		virtual auto unique_id() const noexcept -> sled::SlUniqueID = 0;
 		virtual auto storage() noexcept -> void* = 0;
 		virtual void destroy() noexcept = 0;
+		virtual bool implements(sled::SlUniqueID uniqueid) const noexcept = 0;
 
-		template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+		template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 		auto value() noexcept -> T*
 		{
-			assert(sled::Constant_RuntimeTypeUniqueID<T> == unique_id());
+			assert(implements(sled::detail::uniqueid<T>()));
 			return reinterpret_cast<T*>(storage());
 		}
 

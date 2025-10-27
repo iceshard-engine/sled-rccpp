@@ -1,38 +1,25 @@
 #pragma once
-#include <sled/runtime_interfaces.hxx>
+#include <sled/runtime_object_interface.hxx>
 #include <type_traits>
 #include <tuple>
 
 namespace sled
 {
 
-	template<typename T>
-	struct SlResolveConstrcutorArgs
-	{
-		using Constructor = std::tuple<>;
-	};
-
-	template<sled::concepts::RuntimeCompileCustomConstructor T>
-	struct SlResolveConstrcutorArgs<T>
-	{
-		using Constructor = typename T::SledConstructor;
-	};
-
-	template<typename T, typename InitDef = typename SlResolveConstrcutorArgs<T>::Constructor> // todo: concept
+	template<typename T, typename InitDef = sled::detail::ConsturctorArgsT<T>> // todo: concept
 	class SlRuntimeObjectConstructor;
 
 	template<typename T, typename... InitArgs>
 	class SlRuntimeObjectConstructor<T, std::tuple<InitArgs...>> : public sled::ISlObjectConstructor
 	{
 	public:
-		virtual void InitializeMemory(void* memory, std::remove_cvref_t<InitArgs>&&... args) const noexcept
+		virtual void InitializeMemory(void* memory, InitArgs... args) const noexcept
 		{
 			static_assert(std::is_constructible_v<T, InitArgs...>);
-			if constexpr (std::is_constructible_v<T>)
-			{
-				T* t = new (memory) T{ std::forward<InitArgs>(args)... };
-				assert(t == memory);
-			}
+
+			// Construct the object in the given memory block.
+			T* const t = new (memory) T{ args... };
+			assert(t == memory);
 		}
 
 		virtual void InitializeMemory(void* memory) const noexcept

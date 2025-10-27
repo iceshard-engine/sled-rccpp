@@ -267,7 +267,7 @@ auto sled::rccpp::find_constructor() noexcept -> sled::SlRuntimeObjectConstructo
 	sled::SlConstructorId const ctor_id = type_ctor.GetConstructorId();
 	return static_cast<sled::SlRuntimeObjectConstructor<T>*>(
 		sled::rccpp::find_constructor(ctor_id)
-		);
+	);
 }
 
 template<typename T, typename... Args> requires sled::concepts::RuntimeCompileReadyType<T>
@@ -278,13 +278,22 @@ auto sled::create_object(Args&&... args) noexcept -> sled::SlRuntimeObject<T>*
 	return sled::SlRuntimeObject<T>::init_rccpp_object(ctor, ctor->Construct(), std::forward<Args>(args)...);
 }
 
-#define SLED_TYPE( T )	\
-	static RuntimeTracking< __COUNTER__ > g_runtimeTrackingList_##T; \
-	template<> TObjectConstructorConcrete< TActual< sled::SlRuntimeObject< T > > > TActual< sled::SlRuntimeObject< T > >::TypeConstructor( __FILE__, &g_runtimeTrackingList_##T );\
-	template<> auto TActual< sled::SlRuntimeObject< T > >::name() noexcept -> sled::SlString { return #T; } \
-	template class TActual< sled::SlRuntimeObject< T > >
+#define SLED_TYPE_PC_DECL( M_T, M_ID, M_ParentT, ... ) \
+	template<> \
+	struct sled::RuntimeCompileTypeTraits<M_T> { \
+		static_assert(std::is_constructible_v<M_T, __VA_ARGS__>); \
+		using Type = M_T; \
+		using ParentType = M_ParentT; \
+		using ConstructorArgs = std::tuple<__VA_ARGS__>; \
+		static constexpr sled::SlUniqueID TypeID = sled::SlUniqueID{ M_ID }; \
+	}
 
-#define SLED_TYPE_WITH_CTOR_ARGS( T, ... )	\
+#define SLED_TYPE_DECL( T, ID ) SLED_TYPE_PC_DECL( T, ID, void )
+#define SLED_TYPE_DECL_WITH_SUPER( T, ID, Super ) SLED_TYPE_PC_DECL( T, ID, Super )
+#define SLED_TYPE_DECL_WITH_CTOR( T, ID, ... ) SLED_TYPE_PC_DECL( T, ID, void, __VA_ARGS__ )
+#define SLED_TYPE_DECL_WITH_SUPER_CTOR( T, ID, Super, ... ) SLED_TYPE_PC_DECL( T, ID, Super, __VA_ARGS__ )
+
+#define SLED_TYPE_IMPL( T )	\
 	static RuntimeTracking< __COUNTER__ > g_runtimeTrackingList_##T; \
 	template<> TObjectConstructorConcrete< TActual< sled::SlRuntimeObject< T > > > TActual< sled::SlRuntimeObject< T > >::TypeConstructor( __FILE__, &g_runtimeTrackingList_##T );\
 	template<> auto TActual< sled::SlRuntimeObject< T > >::name() noexcept -> sled::SlString { return #T; } \

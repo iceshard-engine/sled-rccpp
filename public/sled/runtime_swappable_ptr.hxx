@@ -1,118 +1,139 @@
 #pragma once
-#include <sled/runtime_object_owner.hxx>
 #include <sled/runtime_object.hxx>
+#include <sled/runtime_object_owner.hxx>
 
 namespace sled
 {
 
-	template<typename T>
-	struct SlSwappablePtr
+	namespace concepts
 	{
+
+		template<typename Base, typename Derived>
+		concept HasIntactPointerOwnership =
+			// The Derived pointer is not runtime-compiled, so it can be hold by a Base that can be either.
+			(sled::concepts::RuntimeCompileReadyType<Derived> == false)
+			// ... or both pointers are runtime-compiled.
+			|| sled::concepts::RuntimeCompileReadyType<Base>;
+
+	} // namespace concepts
+
+	template<typename T>
+	struct SlSwappablePtr : public sled::ISlRuntimeObjectOwner<true>
+	{
+	private:
+		static auto from_value(T* value) noexcept -> sled::ISlRuntimeObject*
+		{
+			return sled::SlActualRuntimeObject<T>::from_value_pointer(value);
+		}
+
+		static void try_assing_owner(sled::SlSwappablePtr<T>* self) noexcept
+		{
+			if constexpr (sled::concepts::RuntimeCompileReadyType<T>)
+			{
+				if (self->_value != nullptr && self->_factory != nullptr)
+				{
+					from_value(self->_value)->assign_to(self);
+				}
+			}
+		}
+
 	public:
 		T* _value;
 
-		SlSwappablePtr(T* value, sled::ISlObjectFactorySystem* = nullptr) noexcept
-			: _value{ value }
+		constexpr explicit SlSwappablePtr(T* value) noexcept
+			: sled::ISlRuntimeObjectOwner<true>{ nullptr }
+			, _value{ value }
 		{ }
 
-		SlSwappablePtr(std::nullptr_t = {}) noexcept : _value{ nullptr } {}
-		auto operator=(std::nullptr_t) noexcept -> SlSwappablePtr& { _value = nullptr; return *this; }
-
-		SlSwappablePtr(SlSwappablePtr&& other) noexcept = default;
-		auto operator=(SlSwappablePtr&& other) noexcept -> SlSwappablePtr& = default;
-
-		constexpr operator T* () noexcept { return _value; }
-		constexpr operator T* () const noexcept { return _value; }
-	};
-
-	template<sled::concepts::RuntimeCompileReadyType T>
-	struct SlSwappablePtr<T> : public sled::ISlRuntimeObjectOwner<true>
-	{
-	public:
-		sled::ISlRuntimeObject* _value;
-
-		SlSwappablePtr(
-			sled::ISlRuntimeObject* value = nullptr,
-			sled::ISlObjectFactorySystem* factory = nullptr
-		) noexcept
+		constexpr SlSwappablePtr(T* value, sled::ISlObjectFactorySystem* factory) noexcept
 			: sled::ISlRuntimeObjectOwner<true>{ factory }
 			, _value{ value }
 		{
-			if (_value != nullptr)
-			{
-				assert(_factory != nullptr);
-				_value->assign_to(this);
-			}
+			try_assing_owner(this);
 		}
 
-		SlSwappablePtr(SlSwappablePtr&& other) noexcept
-			: sled::ISlRuntimeObjectOwner<true>{ std::exchange(other._factory, nullptr) }
-			, _value{ std::exchange(other._value, nullptr) }
+		template<sled::concepts::RuntimeCompileReadyType U> requires (std::is_same_v<T, U>)
+		constexpr SlSwappablePtr(sled::SlRuntimeObject<U>* object, sled::ISlObjectFactorySystem* factory) noexcept
+			: sled::ISlRuntimeObjectOwner<true>{ factory }
+			, _value{ object->value<T>() }
 		{
-			if (_value != nullptr)
-			{
-				_value->assign_to(this);
-			}
+			try_assing_owner(this);
 		}
 
-		auto operator=(SlSwappablePtr&& other) noexcept -> SlSwappablePtr&
-		{
-			if (this != std::addressof(other))
-			{
-				this->reset();
-				_factory = std::exchange(other._factory, nullptr);
-				_value = std::exchange(other._value, nullptr);
-				if (_value != nullptr)
-				{
-					_value->assign_to(this);
-				}
-			}
-			return *this;
-		}
-
-		SlSwappablePtr(SlSwappablePtr const& other) noexcept = delete;
-		auto operator=(SlSwappablePtr const& other) noexcept -> SlSwappablePtr & = delete;
-
-		~SlSwappablePtr() noexcept override
-		{
-			this->reset();
-		}
-
-		inline void reset() noexcept
-		{
-			if (_value != nullptr)
-			{
-				assert(this->_factory != nullptr);
-				std::exchange(_value, nullptr)->destroy();
-			}
-		}
+		constexpr SlSwappablePtr(std::nullptr_t = {}) noexcept
+			: sled::ISlRuntimeObjectOwner<true>{ nullptr }
+			, _value{ nullptr }
+		{ }
 
 		constexpr auto operator=(std::nullptr_t) noexcept -> SlSwappablePtr&
 		{
-			this->reset();
+			_value = nullptr;
+			_factory = nullptr;
 			return *this;
 		}
 
-		constexpr operator T* () noexcept { return _value == nullptr ? nullptr : _value->value<T>(); }
-		constexpr operator T* () const noexcept { return _value == nullptr ? nullptr : _value->value<T>(); }
-
-	private:
-		void notify(sled::SlObjectId object_id) noexcept override;
-	};
-
-	template<sled::concepts::RuntimeCompileReadyType T>
-	inline void SlSwappablePtr<T>::notify(sled::SlObjectId object_id) noexcept
-	{
-		assert(_value && this->_factory);
-		if (_value && this->_factory)
+		constexpr SlSwappablePtr(SlSwappablePtr&& other) noexcept
+			: sled::ISlRuntimeObjectOwner<true>{ ice::exchange(other._factory, nullptr) }
+			, _value{ ice::exchange(other._value, nullptr) }
 		{
-			IObject* const object = this->_factory->GetObject(object_id);
-			assert(object != nullptr);
-			_value->assign_to(nullptr);
-			_value = sled::SlRuntimeObject<T>::from_rccpp_object(object);
-			assert(_value != nullptr);
-			_value->assign_to(this);
+			try_assing_owner(this);
 		}
-	}
+
+		constexpr auto operator=(SlSwappablePtr&& other) noexcept -> SlSwappablePtr&
+		{
+			if (this != ice::addressof(other))
+			{
+				// Don't destroy anything here, this is the task of the actual pointer class.
+				_factory = ice::exchange(other._factory, nullptr);
+				_value = ice::exchange(other._value, nullptr);
+				try_assing_owner(this);
+			}
+			return *this;
+		}
+
+		template<typename U> requires sled::concepts::HasIntactPointerOwnership<T, U>
+		SlSwappablePtr(SlSwappablePtr<U>&& other) noexcept
+			: sled::ISlRuntimeObjectOwner<true>{ ice::exchange(other._factory, nullptr) }
+			, _value{ std::exchange(other._value, nullptr) }
+		{
+			try_assing_owner(this);
+		}
+
+		template<typename U> requires sled::concepts::HasIntactPointerOwnership<T, U>
+		auto operator=(SlSwappablePtr<U>&& other) noexcept -> sled::SlSwappablePtr&
+		{
+			// Don't destroy anything here, this is the task of the actual pointer class.
+			_factory = ice::exchange(other._factory, nullptr);
+			_value = std::exchange(other._value, nullptr);
+			try_assing_owner(this);
+			return *this;
+		}
+
+		void notify(sled::SlObjectId object_id) noexcept override
+		{
+			if constexpr (sled::concepts::RuntimeCompileReadyType<T>)
+			{
+				assert(_value != nullptr && this->_factory != nullptr);
+				if (_value != nullptr && this->_factory != nullptr)
+				{
+					IObject* const rccpp_object = this->_factory->GetObject(object_id);
+					assert(rccpp_object != nullptr);
+					sled::SlRuntimeObject<T>* const object = sled::SlRuntimeObject<T>::from_rccpp_object(rccpp_object);
+					assert(object != nullptr);
+
+					from_value(_value)->assign_to(nullptr);
+
+					_value = object->value<T>();
+					assert(_value != nullptr);
+					object->assign_to(this);
+				}
+			}
+		}
+
+		constexpr operator T* () & noexcept { return _value; }
+		constexpr operator T* () const & noexcept { return _value; }
+		constexpr operator T* () && noexcept = delete; // ("We don't allow auto-casting from r-values!");
+		constexpr operator T* () const && noexcept = delete; // ("We don't allow auto-casting from r-values!");
+	};
 
 } // namespace sled
