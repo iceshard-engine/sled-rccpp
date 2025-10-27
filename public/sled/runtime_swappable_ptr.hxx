@@ -11,15 +11,19 @@ namespace sled
 		template<typename Base, typename Derived>
 		concept HasIntactPointerOwnership =
 			// The Derived pointer is not runtime-compiled, so it can be hold by a Base that can be either.
-			(sled::concepts::RuntimeCompileReadyType<Derived> == false)
+			(sled::concepts::IsRuntimeCompileReady<Derived> == false)
 			// ... or both pointers are runtime-compiled.
-			|| sled::concepts::RuntimeCompileReadyType<Base>;
+			|| sled::concepts::IsRuntimeCompileReady<Base>;
 
 	} // namespace concepts
 
 	template<typename T>
+	struct SlSwappablePtr;
+
+	template<typename T>
 	struct SlSwappablePtr : public sled::ISlRuntimeObjectOwner<true>
 	{
+		friend struct sled::SlSwappablePtr;
 	private:
 		static auto from_value(T* value) noexcept -> sled::ISlRuntimeObject*
 		{
@@ -28,7 +32,7 @@ namespace sled
 
 		static void try_assing_owner(sled::SlSwappablePtr<T>* self) noexcept
 		{
-			if constexpr (sled::concepts::RuntimeCompileReadyType<T>)
+			if constexpr (sled::concepts::IsRuntimeCompileReady<T>)
 			{
 				if (self->_value != nullptr && self->_factory != nullptr)
 				{
@@ -52,7 +56,7 @@ namespace sled
 			try_assing_owner(this);
 		}
 
-		template<sled::concepts::RuntimeCompileReadyType U> requires (std::is_same_v<T, U>)
+		template<sled::concepts::IsRuntimeCompileReady U> requires (std::is_same_v<T, U>)
 		constexpr SlSwappablePtr(sled::SlRuntimeObject<U>* object, sled::ISlObjectFactorySystem* factory) noexcept
 			: sled::ISlRuntimeObjectOwner<true>{ factory }
 			, _value{ object->value<T>() }
@@ -100,7 +104,7 @@ namespace sled
 		}
 
 		template<typename U> requires sled::concepts::HasIntactPointerOwnership<T, U>
-		auto operator=(SlSwappablePtr<U>&& other) noexcept -> sled::SlSwappablePtr&
+		auto operator=(SlSwappablePtr<U>&& other) noexcept -> sled::SlSwappablePtr<T>&
 		{
 			// Don't destroy anything here, this is the task of the actual pointer class.
 			_factory = ice::exchange(other._factory, nullptr);
@@ -111,7 +115,7 @@ namespace sled
 
 		void notify(sled::SlObjectId object_id) noexcept override
 		{
-			if constexpr (sled::concepts::RuntimeCompileReadyType<T>)
+			if constexpr (sled::concepts::IsRuntimeCompileReady<T>)
 			{
 				assert(_value != nullptr && this->_factory != nullptr);
 				if (_value != nullptr && this->_factory != nullptr)

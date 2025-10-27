@@ -8,12 +8,12 @@ namespace sled
 	namespace rccpp
 	{
 
-		template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+		template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 		auto find_constructor() noexcept -> sled::SlRuntimeObjectConstructor<T>*;
 
 	} // namespace rccpp
 
-	template<typename T, typename... Args> requires sled::concepts::RuntimeCompileReadyType<T>
+	template<typename T, typename... Args> requires sled::concepts::IsRuntimeCompileReady<T>
 	auto create_object(Args&&... args) noexcept -> sled::SlRuntimeObject<T>*;
 
 } // namespace sled
@@ -260,7 +260,7 @@ auto TObjectConstructorConcrete<sled::SlActualRuntimeObject<T>>::GetTrackingInfo
 	return sled::SlRuntimeTrackingInfo::GetNULL();
 }
 
-template<typename T> requires sled::concepts::RuntimeCompileReadyType<T>
+template<typename T> requires sled::concepts::IsRuntimeCompileReady<T>
 auto sled::rccpp::find_constructor() noexcept -> sled::SlRuntimeObjectConstructor<T>*
 {
 	sled::SlObjectConstructorConcrete<T> const& type_ctor = sled::SlActualRuntimeObject<T>::constructor();
@@ -270,7 +270,7 @@ auto sled::rccpp::find_constructor() noexcept -> sled::SlRuntimeObjectConstructo
 	);
 }
 
-template<typename T, typename... Args> requires sled::concepts::RuntimeCompileReadyType<T>
+template<typename T, typename... Args> requires sled::concepts::IsRuntimeCompileReady<T>
 auto sled::create_object(Args&&... args) noexcept -> sled::SlRuntimeObject<T>*
 {
 	static_assert(std::is_constructible_v<T, Args...>, "The type is not constructible with the given arguments!");
